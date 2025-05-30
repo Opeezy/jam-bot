@@ -22,7 +22,6 @@ var (
 	infoLog    *log.Logger
 	errorLog   *log.Logger
 	warningLog *log.Logger
-	traceLog   *log.Logger
 
 	integerOptionMinValue          = 1.0
 	dmPermission                   = false
@@ -214,12 +213,17 @@ var (
 
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"basic-command": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			log.Println(i.Member.User.Username)
+			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
 					Content: "Hey there! Congratulations, you just executed your first slash command",
 				},
 			})
+
+			if err != nil {
+				log.Printf("error at slash command: basic-command. Reason: %s", err)
+			}
 		},
 		"basic-command-with-files": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -530,9 +534,11 @@ var (
 func init() { flag.Parse() }
 
 func main() {
+	// Log file creation
+	log.Println("Creating loggers...")
 	logFile, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalf("Failed to open log file: %v", err)
+		panic(err)
 	}
 	defer logFile.Close()
 
@@ -540,36 +546,61 @@ func main() {
 	infoLog = log.New(logFile, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(logFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 	warningLog = log.New(logFile, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
-	traceLog = log.New(logFile, "TRACE: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	infoLog.Println("Initializing discord client...")
+	infoLog.Println("initializing client...")
+
+	// Initializing discord client
 	discord, err := discordgo.New("Bot " + *BotToken)
 	if err != nil {
-		errorLog.Println("Closing application due to failed client initialization.")
-		traceLog.Fatal(err)
+		errorLog.Fatalf("client failed to initialize: %s", err)
 	}
 
-	discord.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		log.Printf("Logged in as: %v#%v", s.State.User.Username, s.State.User.Discriminator)
+	// Adding handlers
+	discord.AddHandler(func(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
+		if commandHandle, ok := commandHandlers[interaction.ApplicationCommandData().Name]; ok {
+			commandHandle(session, interaction)
+		}
 	})
 
-	infoLog.Println("Opening connection...")
+	discord.AddHandler(func(session *discordgo.Session, ready *discordgo.Ready) {
+		infoLog.Printf("logged in as: %v#%v", session.State.User.Username, session.State.User.Discriminator)
+	})
+
+	infoLog.Println("opening connection...")
+
+	//Opening connection for bot
 	err = discord.Open()
 	if err != nil {
-		errorLog.Println("Unable to open connection.")
-		traceLog.Fatal(err)
+		errorLog.Fatalf("unable to open connection: %s", err)
 	}
-
 	defer discord.Close()
 
-	log.Println("Bot is now running. Press CTRL-C to exit.")
-	infoLog.Println("Bot is now running.")
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc
+	infoLog.Println("adding commands...")
 
+	// Registering bot commands
+	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
+	for i, v := range commands {
+		cmd, err := discord.ApplicationCommandCreate(discord.State.User.ID, *GuildID, v)
+		if err != nil {
+			errorLog.Fatalf("cannot create '%v' command: %v", v.Name, err)
+		}
+		registeredCommands[i] = cmd
+	}
+
+	// Waiting for termination signal
+	log.Println("Bot is now running. Press CTRL-C to exit.")
+	infoLog.Println("bot is now running.")
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-stop
+
+	log.Println("terminating program...")
+	infoLog.Println("terminating program...")
+
+	// Removing all commands added previously if RemoveCommands==true
 	if *RemoveCommands {
-		log.Println("Removing commands...")
+		log.Println("removing commands...")
+		infoLog.Println("removing commands...")
 		// // We need to fetch the commands, since deleting requires the command ID.
 		// // We are doing this from the returned commands on line 375, because using
 		// // this will delete all the commands, which might not be desirable, so we
@@ -578,15 +609,13 @@ func main() {
 		// if err != nil {
 		// 	log.Fatalf("Could not fetch registered commands: %v", err)
 		// }
-
 		for _, v := range registeredCommands {
-			err := s.ApplicationCommandDelete(s.State.User.ID, *GuildID, v.ID)
+			err := discord.ApplicationCommandDelete(discord.State.User.ID, *GuildID, v.ID)
 			if err != nil {
-				log.Panicf("Cannot delete '%v' command: %v", v.Name, err)
+				errorLog.Panicf("cannot delete '%v' command: %v", v.Name, err)
 			}
 		}
 	}
-
 }
 
 func satisfySongRequest(s *discordgo.Session, m *discordgo.MessageCreate) {
