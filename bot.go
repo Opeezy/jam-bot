@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -66,7 +67,7 @@ func init() { flag.Parse() }
 
 func main() {
 	// Log file creation
-	log.Println("Creating loggers...")
+	log.Println("Creating log file...")
 	logFile, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
@@ -74,9 +75,11 @@ func main() {
 	defer logFile.Close()
 
 	// Create loggers for each level
-	infoLog = log.New(logFile, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	errorLog = log.New(logFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
-	warningLog = log.New(logFile, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+
+	infoLog = log.New(multiWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	errorLog = log.New(multiWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+	warningLog = log.New(multiWriter, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	infoLog.Println("initializing client...")
 
@@ -94,7 +97,9 @@ func main() {
 				h(s, i)
 			}
 		case discordgo.InteractionModalSubmit:
+
 			// TODO: add logic to register a user's Spotify account into a database.
+
 			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -137,18 +142,15 @@ func main() {
 	}
 
 	// Waiting for termination signal
-	log.Println("Bot is now running. Press CTRL-C to exit.")
-	infoLog.Println("bot is now running.")
+	infoLog.Println("Bot is now running. Press CTRL-C to exit.")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
 
-	log.Println("terminating program...")
 	infoLog.Println("terminating program...")
 
 	// Removing all commands added previously if RemoveCommands==true
 	if *RemoveCommands {
-		log.Println("removing commands...")
 		infoLog.Println("removing commands...")
 		// // We need to fetch the commands, since deleting requires the command ID.
 		// // We are doing this from the returned commands on line 375, because using
