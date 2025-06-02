@@ -12,9 +12,11 @@ import (
 )
 
 var (
-	GuildID        = flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
-	BotToken       = flag.String("token", "", "Bot access token")
-	RemoveCommands = flag.Bool("rmcmd", true, "Remove all commands after shutdowning or not")
+	GuildID         = flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
+	BotToken        = flag.String("token", "", "Bot access token")
+	RemoveCommands  = flag.Bool("rmcmd", true, "Remove all commands after shutdown or not")
+	SpotifyClientId = flag.String("spid", "", "The Spotify client ID")
+	SpofifySecret   = flag.String("spsecret", "", "The Spotify client secret")
 
 	infoLog    *log.Logger
 	errorLog   *log.Logger
@@ -32,7 +34,6 @@ var (
 
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"register-spotify": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			log.Println(i.Member.User.Username)
 			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
 				Data: &discordgo.InteractionResponseData{
@@ -44,6 +45,19 @@ var (
 								discordgo.TextInput{
 									CustomID:    "Username",
 									Label:       "Enter your username",
+									Style:       discordgo.TextInputShort,
+									Placeholder: "",
+									Required:    true,
+									MaxLength:   300,
+									MinLength:   1,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "Password",
+									Label:       "Enter your password",
 									Style:       discordgo.TextInputShort,
 									Placeholder: "",
 									Required:    true,
@@ -93,8 +107,9 @@ func main() {
 	discord.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
-			if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
-				h(s, i)
+			//Registering commands
+			if handler, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
+				handler(s, i)
 			}
 		case discordgo.InteractionModalSubmit:
 
