@@ -1,49 +1,101 @@
 package main
 
 import (
-	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"errors"
+	"fmt"
+	"net/url"
+
+	"github.com/google/uuid"
 )
 
-type SpotifyAuthToken struct {
-	Token      string `json:"access_token"`
-	Type       string `json:"token_type"`
-	Expiration int    `json:"expires_in"`
+const (
+	spotifyAuthUrl  = "https://accounts.spotify.com/authorize"
+	spotifyTokenUrl = "https://accounts.spotify.com/api/token"
+)
+
+type SpotifyAuthRequestPKCE struct {
+	ClientId        string
+	ResponseType    string
+	Redirect        string
+	State           string
+	Scope           string
+	ChallengeMethod string
+	CodeChallenge   string
 }
 
-func (s *SpotifyAuthToken) RetrieveTokenPKCE(clientId string, clientSecret string) error {
-	// body := bytes.NewBufferString(fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", clientId, clientSecret))
+type SpotifyTokenRequestPKCE struct {
+	GrantType    string
+	Code         string
+	Redirect     string
+	ClientId     string
+	CodeVerifier string
+}
 
-	// res, err := http.Post("https://accounts.spotify.com/api/token", "application/x-www-form-urlencoded", body)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer res.Body.Close()
-
-	// var responseBody []byte
-	// i, err := res.Body.Read(responseBody)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// if i == 0 {
-	// 	return errors.New("the authorization token request returned no data")
-	// }
-
-	// err = json.Unmarshal(responseBody, s)
-	// if err != nil {
-	// 	return err
-	// }
-
-	randStr := make([]byte, 64)
-	_, err := rand.Read(randString)
+func main() {
+	v := NewVerifier()
+	c := GenerateCodeChallenge(v)
+	req, err := NewSpotifyAuthRequestPKCE("test", "null", "test test2", c, "test.com")
 	if err != nil {
-		return err
+		fmt.Println(err)
+	}
+	url, err := req.GenerateSpotifyAuthUrl()
+	if err != nil {
+		fmt.Println(err)
 	}
 
-	randStrEncoded64 := base64.URLEncoding.EncodeToString(randStr)
+	fmt.Println(url)
+}
 
-	codeVerifier := randStrEncoded64[:len(randStrEncoded64)]
+func (s *SpotifyAuthRequestPKCE) GenerateSpotifyAuthUrl() (string, error) {
+	baseUrl, err := url.Parse(spotifyAuthUrl)
+	if err != nil {
+		return "", err
+	}
 
-	return nil
+	params := map[string]string{
+		"client_id":             s.ClientId,
+		"response_type":         s.ResponseType,
+		"redirect_url":          s.Redirect,
+		"state":                 s.State,
+		"scope":                 s.Scope,
+		"code_challenge_method": s.ChallengeMethod,
+		"code_challenge":        s.CodeChallenge,
+	}
+
+	values := url.Values{}
+	for key, value := range params {
+		values.Add(key, value)
+	}
+	baseUrl.RawQuery = values.Encode()
+
+	return baseUrl.String(), nil
+}
+
+func NewSpotifyAuthRequestPKCE(clientId string, state string, scope string, codeChallenge string, redirect string) (*SpotifyAuthRequestPKCE, error) {
+	if clientId == "" || redirect == "" || codeChallenge == "" {
+		err := errors.New("one or more required params are empty strings [clientId, codeChallenge, redirect]")
+		return nil, err
+	} else {
+		return &SpotifyAuthRequestPKCE{
+			ClientId:        clientId,
+			ResponseType:    "code",
+			Redirect:        redirect,
+			State:           state,
+			Scope:           scope,
+			ChallengeMethod: "SA256",
+			CodeChallenge:   codeChallenge,
+		}, nil
+	}
+}
+
+func NewVerifier() string {
+	return base64.RawURLEncoding.EncodeToString([]byte(uuid.New().String()))
+}
+
+func GenerateCodeChallenge(verifier string) string {
+	hash := sha256.New()
+	hash.Write([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 }
