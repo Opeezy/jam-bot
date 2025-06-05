@@ -1,6 +1,6 @@
 FROM golang:1.24.3-bullseye
 
-WORKDIR /bot
+WORKDIR /app
 
 COPY . .
 

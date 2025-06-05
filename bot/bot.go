@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	GuildID         = flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
-	BotToken        = flag.String("token", "", "Bot access token")
-	RemoveCommands  = flag.Bool("rmcmd", true, "Remove all commands after shutdown or not")
-	SpotifyClientId = flag.String("spid", "", "The Spotify client ID")
-	SpofifySecret   = flag.String("spsecret", "", "The Spotify client secret")
+	guildID         = flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
+	botToken        = flag.String("token", "", "Bot access token")
+	removeCommands  = flag.Bool("rmcmd", true, "Remove all commands after shutdown or not")
+	spotifyClientId = flag.String("spid", "", "The Spotify client ID")
+	spofifySecret   = flag.String("spsecret", "", "The Spotify client secret")
+	environment     = flag.String("env", "", "The current app environment")
 
 	infoLog    *log.Logger
 	errorLog   *log.Logger
@@ -80,34 +81,30 @@ var (
 func init() { flag.Parse() }
 
 func main() {
-	// Log file creation
-	log.Println("Creating log file...")
+	log.Println("creating loggers...")
 	logFile, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
 	defer logFile.Close()
 
-	// Create loggers for each level
 	multiWriter := io.MultiWriter(os.Stdout, logFile)
 
 	infoLog = log.New(multiWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(multiWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 	warningLog = log.New(multiWriter, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	infoLog.Println("initializing client...")
+	infoLog.Printf("environment=%s", *environment)
 
-	// Initializing discord client
-	discord, err := discordgo.New("Bot " + *BotToken)
+	infoLog.Println("initializing client...")
+	discord, err := discordgo.New("Bot " + *botToken)
 	if err != nil {
 		errorLog.Fatalf("client failed to initialize: %s", err)
 	}
 
-	// Adding handlers
 	discord.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
-			//Registering commands
 			if handler, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
 				handler(s, i)
 			}
@@ -137,7 +134,6 @@ func main() {
 
 	infoLog.Println("opening connection...")
 
-	//Opening connection for bot
 	err = discord.Open()
 	if err != nil {
 		errorLog.Fatalf("unable to open connection: %s", err)
@@ -146,17 +142,15 @@ func main() {
 
 	infoLog.Println("adding commands...")
 
-	// Registering bot commands
 	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands))
 	for i, v := range commands {
-		cmd, err := discord.ApplicationCommandCreate(discord.State.User.ID, *GuildID, v)
+		cmd, err := discord.ApplicationCommandCreate(discord.State.User.ID, *guildID, v)
 		if err != nil {
 			errorLog.Fatalf("cannot create '%v' command: %v", v.Name, err)
 		}
 		registeredCommands[i] = cmd
 	}
 
-	// Waiting for termination signal
 	infoLog.Println("Bot is now running. Press CTRL-C to exit.")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
@@ -165,18 +159,10 @@ func main() {
 	infoLog.Println("terminating program...")
 
 	// Removing all commands added previously if RemoveCommands==true
-	if *RemoveCommands {
+	if *removeCommands {
 		infoLog.Println("removing commands...")
-		// // We need to fetch the commands, since deleting requires the command ID.
-		// // We are doing this from the returned commands on line 375, because using
-		// // this will delete all the commands, which might not be desirable, so we
-		// // are deleting only the commands that we added.
-		// registeredCommands, err := s.ApplicationCommands(s.State.User.ID, *GuildID)
-		// if err != nil {
-		// 	log.Fatalf("Could not fetch registered commands: %v", err)
-		// }
 		for _, v := range registeredCommands {
-			err := discord.ApplicationCommandDelete(discord.State.User.ID, *GuildID, v.ID)
+			err := discord.ApplicationCommandDelete(discord.State.User.ID, *guildID, v.ID)
 			if err != nil {
 				errorLog.Panicf("cannot delete '%v' command: %v", v.Name, err)
 			}

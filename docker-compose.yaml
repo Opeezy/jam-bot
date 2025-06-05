@@ -1,7 +1,9 @@
 version: '0.1.0'
 
 services:
-  app:
-    build: .
-    env_file: .env
-    entrypoint: ["/bin/bot", "--token", "${TOKEN}", "--spid", "${SPOTIFY_CLIENT_ID}", "--spsecret", "${SPOTIFY_SECRET}"]
+  bot:
+    build: ./bot
+    entrypoint: ["/bin/bot", "--token", "${TOKEN}", "--spid", "${SPOTIFY_CLIENT_ID}", "--spsecret", "${SPOTIFY_SECRET}", "--env", "${ENVIRONMENT}"]
+  server:
+    build: ./server
+    ports: "8080:8080"
