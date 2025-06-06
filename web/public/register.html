@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HTMX with Go and Chi</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+     <link rel="stylesheet" type="text/css" href="../styles/register.css">
+</head>
+<body>
+    <div id="register-div">
+        <h1>Register your Spotify account</h1>
+        <button hx-get="/api/v1/login">Register</button>
+    </div>
+</body>
+</html>
