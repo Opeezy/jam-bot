@@ -4,6 +4,6 @@ services:
   bot:
     build: ./bot
     entrypoint: ["/bin/bot", "--token", "${TOKEN}", "--spid", "${SPOTIFY_CLIENT_ID}", "--spsecret", "${SPOTIFY_SECRET}", "--env", "${ENVIRONMENT}"]
-  server:
-    build: ./server
-    ports: "8080:8080"
+  web-app:
+    build: ./web
+    entrypoint: ["/bin/server", "--port", "${PORT}", "--env", "${ENVIRONMENT}"]
